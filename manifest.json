@@ -1,16 +1,27 @@
 {
   "manifest_version": 3,
-  "name": "AskInline Gemini",
+  "name": "AskInline",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "askinline@user.dev"
+    }
+  },
   "version": "1.0",
   "description": "Right-click selected text to Ask Gemini AI.",
   "permissions": [
     "activeTab",
     "contextMenus",
+    "storage"
+  ],
+  "host_permissions": [
     "https://generativelanguage.googleapis.com/"
   ],
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": false
+  },
   "background": {
     "scripts": [
-      "config.js",
       "background.js"
     ]
   },

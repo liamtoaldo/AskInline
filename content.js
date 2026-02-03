@@ -3,6 +3,7 @@
 let lastX = 0;
 let lastY = 0;
 let savedSelection = ""; // Fix: Store selection here
+let lastRawResponse = ""; // Store raw markdown for copying
 
 document.addEventListener("contextmenu", (e) => {
   lastX = e.pageX;
@@ -30,22 +31,31 @@ popup.style.cssText = `
 popup.innerHTML = `
   <div id="ai-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; cursor: move; user-select: none;">
     <div style="font-size: 11px; color: #aaa; text-transform: uppercase; letter-spacing: 0.5px; font-weight: bold;">
-      ✨ Ask Gemini
+      ✨ AskInline
     </div>
     <button id="ai-close-btn" style="background: none; border: none; cursor: pointer; font-size: 18px; color: #888; padding: 0;">&times;</button>
   </div>
   
   <div id="sel-preview" style="font-size: 13px; color: #bbb; margin-bottom: 12px; font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 2px solid #007bff; padding-left: 5px;">...</div>
   
-  <input type="text" id="ai-user-prompt" placeholder="Empty for definition..." 
+  <input type="text" id="ai-user-prompt" placeholder="Add additional comments..." 
     style="width: 100%; margin-bottom: 10px; padding: 8px; box-sizing: border-box; 
            background: #2d2d2d; border: 1px solid #444; color: white; border-radius: 4px; outline: none;">
   
-  <button id="ai-submit-btn" 
-    style="width: 100%; background: #007bff; color: white; border: none; padding: 8px; 
-           cursor: pointer; border-radius: 4px; font-weight: 600; transition: background 0.2s;">
-    Generate
-  </button>
+  <div style="display: flex; gap: 8px;">
+    <button id="ai-submit-btn" 
+        style="flex: 1; background: #007bff; color: white; border: none; padding: 8px; 
+            cursor: pointer; border-radius: 4px; font-weight: 600; transition: background 0.2s;">
+        Generate
+    </button>
+
+    <button id="ai-copy-btn" 
+        style="background: #333; color: #ccc; border: 1px solid #555; padding: 8px 12px; 
+            cursor: pointer; border-radius: 4px; font-weight: 500; font-size: 16px; display: none;"
+        title="Copy Markdown">
+        📋
+    </button>
+  </div>
   
   <div id="ai-result" 
     style="margin-top: 12px; font-size: 14px; line-height: 1.5; max-height: 250px; overflow-y: auto; 
@@ -83,8 +93,9 @@ browser.runtime.onMessage.addListener((request) => {
 });
 
 function showPopup(selectionText) {
-  savedSelection = selectionText; // Store selection immediately
-  
+  savedSelection = selectionText || ""; // Store selection immediately, guard against null
+
+
   // Smart Positioning: Keep inside Viewport
   const viewportWidth = window.innerWidth;
   const viewportHeight = window.innerHeight;
@@ -100,20 +111,22 @@ function showPopup(selectionText) {
   // Y axis: flip up if overflow bottom
   let top = lastY + 10;
   if (lastY - window.scrollY + popupH > viewportHeight) {
-    top = lastY - popupH; 
+    top = lastY - popupH;
   }
 
   popup.style.left = left + 'px';
   popup.style.top = top + 'px';
   popup.style.display = 'block';
 
-  const preview = selectionText.length > 50 ? selectionText.substring(0, 50) + '...' : selectionText;
+  const safeSelection = savedSelection || "";
+  const preview = safeSelection.length > 50 ? safeSelection.substring(0, 50) + '...' : safeSelection;
   document.getElementById('sel-preview').textContent = preview;
 
   document.getElementById('ai-result').style.display = 'none';
   document.getElementById('ai-result').textContent = '';
+  document.getElementById('ai-copy-btn').style.display = 'none'; // Hide copy button on new open
   document.getElementById('ai-user-prompt').value = '';
-  
+
   setTimeout(() => document.getElementById('ai-user-prompt').focus(), 100);
 }
 
@@ -145,28 +158,41 @@ document.getElementById('ai-submit-btn').addEventListener('click', () => {
 
   browser.runtime.sendMessage({
     action: "askAI",
-    context: savedSelection, 
+    context: savedSelection,
     prompt: finalPrompt
   }, (response) => {
-	 if (response && response.answer) {
-		  let safeText = response.answer
-			// 1. Intestazioni (### Titolo)
-			.replace(/^### (.*$)/gim, '<h3 style="margin: 10px 0 5px; font-size: 16px; color: #fff;">$1</h3>')
-			// 2. Grassetto (**testo**)
-			.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-			// 3. Corsivo (*testo* oppure _testo_)
-			.replace(/(\*|_)(.*?)\1/g, '<em>$2</em>')
-			// 4. Codice inline (`codice`) - Con sfondo scuro per risaltare
-			.replace(/`(.*?)`/g, '<code style="background:#333; padding:2px 4px; border-radius:3px; font-family:monospace; color: #ffcc00;">$1</code>')
-			// 5. Elenchi puntati (Linee che iniziano con - o *)
-			.replace(/^\s*[\-\*]\s+(.*)$/gm, '<div style="margin-left: 10px;">• $1</div>')
-			// 6. Converti i restanti "a capo" in <br>
-			.replace(/\n/g, ' ');
+    if (response && response.answer) {
+      lastRawResponse = response.answer; // Save raw response
+      let safeText = response.answer
+        // 1. Intestazioni (### Titolo)
+        .replace(/^### (.*$)/gim, '<h3 style="margin: 10px 0 5px; font-size: 16px; color: #fff;">$1</h3>')
+        // 2. Grassetto (**testo**)
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        // 3. Corsivo (*testo* oppure _testo_)
+        .replace(/(\*|_)(.*?)\1/g, '<em>$2</em>')
+        // 4. Codice inline (`codice`) - Con sfondo scuro per risaltare
+        .replace(/`(.*?)`/g, '<code style="background:#333; padding:2px 4px; border-radius:3px; font-family:monospace; color: #ffcc00;">$1</code>')
+        // 5. Elenchi puntati (Linee che iniziano con - o *)
+        .replace(/^\s*[\-\*]\s+(.*)$/gm, '<div style="margin-left: 10px;">• $1</div>')
+        // 6. Converti i restanti "a capo" in <br>
+        .replace(/\n/g, ' ');
 
-		  resultDiv.innerHTML = safeText;
-	} else {
-	  resultDiv.textContent = "Error: No response.";
-	}
+      resultDiv.innerHTML = safeText;
+      document.getElementById('ai-copy-btn').style.display = 'block'; // Show copy button
+    } else {
+      resultDiv.textContent = "Error: No response.";
+    }
+  });
+});
+
+// --- Copy Logic ---
+document.getElementById('ai-copy-btn').addEventListener('click', () => {
+  if (!lastRawResponse) return;
+  navigator.clipboard.writeText(lastRawResponse).then(() => {
+    const btn = document.getElementById('ai-copy-btn');
+    const originalText = btn.textContent;
+    btn.textContent = "✅";
+    setTimeout(() => btn.textContent = originalText, 2000);
   });
 });
 
