@@ -1,8 +1,8 @@
 # AskInline
 
-AskInline is a Firefox extension that integrates Google's Gemini AI directly into your browser context menu. It allows you to select text on any webpage and instantly query Gemini about it—whether you need a definition, a translation, or a summary—without opening a new tab or breaking your flow.
+AskInline is a Firefox extension that integrates Google's Gemini AI directly into your browser context menu. It allows you to select text on any webpage and instantly query Gemini about it, whether you need a definition, a translation, or a summary, without opening a new tab or breaking your flow.
 
-![AskInline Screenshot](https://via.placeholder.com/800x400.png?text=AskInline+Demo+Placeholder)
+![AskInline Screenshot](img/screenshot.png)
 
 ## Why?
 
@@ -17,14 +17,10 @@ Switching tabs to ask an LLM a quick question is a friction point. AskInline sol
 - **Privacy**: Your API Key is stored locally in your browser (`browser.storage.sync`) and is never sent to any third-party server other than Google's API directly.
 
 ## Installation
-
-1.  Clone this repository:
-    ```bash
-    git clone https://github.com/yourusername/askinline.git
-    ```
-2.  Open Firefox and navigate to `about:debugging`.
-3.  Click **"This Firefox"** > **"Load Temporary Add-on"**.
-4.  Select the `manifest.json` file from the cloned folder.
+1. Clone this repository: `git clone https://github.com/liamtoaldo/AskInline.git`
+2. Open Firefox and navigate to `about:debugging`.
+3. Click **"This Firefox"** > **"Load Temporary Add-on"**.
+4. Select the `manifest.json` file from the cloned folder.
 
 ## Configuration
 
