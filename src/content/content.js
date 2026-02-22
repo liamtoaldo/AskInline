@@ -151,7 +151,7 @@ function showPopup(selectionText, imageSrc) {
 
 
 
-  document.getElementById('ai-result').style.display = 'block'; // Always block for chat
+  document.getElementById('ai-result').style.display = 'none'; // Initially hidden
   document.getElementById('ai-result').innerHTML = ''; // Clear chat
   document.getElementById('ai-copy-btn').style.display = 'none'; // Hide copy button on new open
   document.getElementById('ai-user-prompt').value = '';
@@ -188,8 +188,11 @@ document.getElementById('ai-submit-btn').addEventListener('click', () => {
     fullPrompt = inputVal;
   }
 
-  // Render User Message
+  // Show result div when submitting
   const resultDiv = document.getElementById('ai-result');
+  resultDiv.style.display = 'block';
+
+  // Render User Message
   const userMsg = inputVal ? inputVal : "Analysis request";
   resultDiv.innerHTML += `<div style="text-align: right; margin-bottom: 8px;"><span style="background: #0044cc; color: white; padding: 6px 10px; border-radius: 12px 12px 2px 12px; display: inline-block; font-size: 13px;">${userMsg}</span></div>`;
   resultDiv.scrollTop = resultDiv.scrollHeight;
@@ -241,6 +244,14 @@ document.getElementById('ai-submit-btn').addEventListener('click', () => {
   });
 
   document.getElementById('ai-user-prompt').value = ''; // Clear input
+});
+
+// --- Enter Key Logic ---
+document.getElementById('ai-user-prompt').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    document.getElementById('ai-submit-btn').click();
+  }
 });
 
 // --- Pin Logic ---
