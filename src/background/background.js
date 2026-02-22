@@ -13,6 +13,13 @@ browser.contextMenus.create({
   contexts: ["image"]
 });
 
+// Editable (Inputs, Textareas)
+browser.contextMenus.create({
+  id: "ask-gemini-fill",
+  title: "✨ AskInline to write here",
+  contexts: ["editable"]
+});
+
 // 2. Handle Right-Click
 browser.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === "ask-gemini-selection" || info.menuItemId === "ask-gemini-image") {
@@ -21,6 +28,12 @@ browser.contextMenus.onClicked.addListener((info, tab) => {
       selectionText: info.selectionText, // Will be undefined for simple image click
       imageSrc: info.srcUrl,
       mediaType: info.mediaType
+    }).catch(err => {
+      console.warn("Could not send message to content script. Ensure the page is refreshed.", err);
+    });
+  } else if (info.menuItemId === "ask-gemini-fill") {
+    browser.tabs.sendMessage(tab.id, {
+      action: "composeInline"
     }).catch(err => {
       console.warn("Could not send message to content script. Ensure the page is refreshed.", err);
     });

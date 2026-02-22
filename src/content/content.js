@@ -7,10 +7,17 @@ let savedImageSrc = ""; // Store image URL
 let lastRawResponse = ""; // Store raw markdown for copying
 let isPinned = false; // Pin state
 let chatHistory = []; // Local history for current session
+let composeMode = false; // Flag for inline composition
+let lastTarget = null; // Store reference to clicked input/textarea
 
 document.addEventListener("contextmenu", (e) => {
   lastX = e.pageX;
   lastY = e.pageY;
+  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)) {
+    lastTarget = e.target;
+  } else {
+    lastTarget = null;
+  }
 });
 
 // --- Create Pop-up (Dark Theme) ---
@@ -26,34 +33,40 @@ popup.style.cssText = `
   box-shadow: 0 10px 25px rgba(0,0,0,0.5); 
   border-radius: 8px;
   width: 320px; 
+  min-width: 250px;
+  min-height: 200px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
   display: none; 
+  flex-direction: column;
+  resize: both; 
+  overflow: hidden;
 `;
 
 // Added 'cursor: move' to header
 popup.innerHTML = `
   <div id="ai-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; cursor: move; user-select: none;">
-    <div style="font-size: 11px; color: #aaa; text-transform: uppercase; letter-spacing: 0.5px; font-weight: bold;">
+    <div id="ai-title-text" style="font-size: 11px; color: #aaa; text-transform: uppercase; letter-spacing: 0.5px; font-weight: bold;">
       ✨ AskInline
     </div>
     <div style="display: flex; gap: 8px;">
-        <button id="ai-pin-btn" style="background: none; border: none; cursor: pointer; font-size: 16px; color: #555; padding: 0;" title="Pin Modal">📌</button>
-        <button id="ai-close-btn" style="background: none; border: none; cursor: pointer; font-size: 18px; color: #888; padding: 0;">&times;</button>
+        <button id="ai-reset-btn" style="background: none; border: none; cursor: pointer; font-size: 14px; color: #555; padding: 0;" title="Reset Chat">🔄</button>
+        <button id="ai-pin-btn" style="background: none; border: none; cursor: pointer; font-size: 14px; color: #555; padding: 0;" title="Pin Modal">📌</button>
+        <button id="ai-close-btn" style="background: none; border: none; cursor: pointer; font-size: 16px; color: #888; padding: 0;">&times;</button>
     </div>
   </div>
   
   <div id="sel-preview" style="font-size: 13px; color: #bbb; margin-bottom: 12px; font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 2px solid #007bff; padding-left: 5px;">...</div>
   
   <div id="ai-result" 
-    style="margin-bottom: 12px; font-size: 14px; line-height: 1.5; max-height: 250px; overflow-y: auto; 
-           background: #252526; padding: 10px; border-radius: 4px; border: 1px solid #333; display:none; color: #ddd;">
+    style="margin-bottom: 12px; font-size: 14px; line-height: 1.5; flex-grow: 1; overflow-y: auto; overflow-wrap: anywhere;
+           background: #252526; padding: 10px; border-radius: 4px; border: 1px solid #333; display:none; color: #ddd; min-height: 0;">
   </div>
 
   <input type="text" id="ai-user-prompt" placeholder="Add additional comments..." 
-    style="width: 100%; margin-bottom: 10px; padding: 8px; box-sizing: border-box; 
-           background: #2d2d2d; border: 1px solid #444; color: white; border-radius: 4px; outline: none;">
+    style="width: 100%; margin-top: auto; margin-bottom: 10px; padding: 8px; box-sizing: border-box; 
+           background: #2d2d2d; border: 1px solid #444; color: white; border-radius: 4px; outline: none; flex-shrink: 0;">
   
-  <div style="display: flex; gap: 8px;">
+  <div style="display: flex; gap: 8px; flex-shrink: 0;">
     <button id="ai-submit-btn" 
         style="flex: 1; background: #007bff; color: white; border: none; padding: 8px; 
             cursor: pointer; border-radius: 4px; font-weight: 600; transition: background 0.2s;">
@@ -66,6 +79,13 @@ popup.innerHTML = `
         title="Copy Markdown">
         📋
     </button>
+    
+    <button id="ai-insert-btn" 
+        style="background: #28a745; color: white; border: none; padding: 8px 12px; 
+            cursor: pointer; border-radius: 4px; font-weight: 600; font-size: 14px; display: none;"
+        title="Insert into field">
+        Insert
+    </button>
   </div>
 `;
 
@@ -76,6 +96,8 @@ const header = popup.querySelector('#ai-header');
 let isDragging = false, offsetX = 0, offsetY = 0;
 
 header.addEventListener('mousedown', (e) => {
+  // Prevent dragging if clicking on buttons
+  if (e.target.tagName === 'BUTTON') return;
   isDragging = true;
   offsetX = e.clientX - popup.getBoundingClientRect().left;
   offsetY = e.clientY - popup.getBoundingClientRect().top;
@@ -95,7 +117,13 @@ document.addEventListener('mouseup', () => isDragging = false);
 // --- Listen for Background Trigger ---
 browser.runtime.onMessage.addListener((request) => {
   if (request.action === "openPopup") {
+    composeMode = false;
+    document.getElementById('ai-title-text').textContent = "✨ AskInline";
     showPopup(request.selectionText, request.imageSrc);
+  } else if (request.action === "composeInline" && lastTarget) {
+    composeMode = true;
+    document.getElementById('ai-title-text').textContent = "✨ Compose Inline";
+    showPopup("", ""); // Open without specific selection
   }
 });
 
@@ -139,7 +167,7 @@ function showPopup(selectionText, imageSrc) {
 
   popup.style.left = left + 'px';
   popup.style.top = top + 'px';
-  popup.style.display = 'block';
+  popup.style.display = 'flex';
 
   if (savedImageSrc) {
     document.getElementById('sel-preview').innerHTML = `<img src="${savedImageSrc}" style="max-height: 100px; display: block; border-radius: 4px;">`;
@@ -151,9 +179,11 @@ function showPopup(selectionText, imageSrc) {
 
 
 
-  document.getElementById('ai-result').style.display = 'none'; // Initially hidden
-  document.getElementById('ai-result').innerHTML = ''; // Clear chat
+  const resultDiv = document.getElementById('ai-result');
+  resultDiv.style.display = 'none'; // Initially hidden
+  resultDiv.innerHTML = ''; // Clear chat
   document.getElementById('ai-copy-btn').style.display = 'none'; // Hide copy button on new open
+  document.getElementById('ai-insert-btn').style.display = 'none'; // Hide insert button on new open
   document.getElementById('ai-user-prompt').value = '';
 
   setTimeout(() => document.getElementById('ai-user-prompt').focus(), 100);
@@ -172,9 +202,11 @@ document.getElementById('ai-submit-btn').addEventListener('click', () => {
 
   if (chatHistory.length === 0) {
     // FIRST TURN: Include System Context Instructions
-    const langRule = "Detect the language of the 'Context'. Answer strictly in that language. Do NOT mention the language detected, just start the answer immediately.";
+    const langRule = "Detect the language of the 'Context' (or the input if empty). Answer strictly in that language. Do NOT mention the language detected, just start the answer immediately.";
 
-    if (inputVal) {
+    if (composeMode) {
+      taskRule = `The user wants you to write some text based on this request: "${inputVal}". Provide ONLY the requested text without quotes or introductory phrases.`;
+    } else if (inputVal) {
       taskRule = `User question: "${inputVal}". Answer based on context.`;
     } else if (savedImageSrc) {
       taskRule = "Describe this image in detail.";
@@ -238,6 +270,9 @@ document.getElementById('ai-submit-btn').addEventListener('click', () => {
       chatHistory.push({ role: "model", text: response.answer }); // Save raw answer
 
       document.getElementById('ai-copy-btn').style.display = 'block'; // Show copy button
+      if (composeMode && lastTarget) {
+        document.getElementById('ai-insert-btn').style.display = 'block'; // Show insert button
+      }
     } else {
       resultDiv.innerHTML += `<div style="color: #ff5555; font-size: 13px;">Error: No response.</div>`;
     }
@@ -276,6 +311,51 @@ document.getElementById('ai-copy-btn').addEventListener('click', () => {
     btn.textContent = "✅";
     setTimeout(() => btn.textContent = originalText, 2000);
   });
+});
+
+// --- Insert Logic ---
+document.getElementById('ai-insert-btn').addEventListener('click', () => {
+  if (!lastRawResponse || !lastTarget) return;
+
+  // Clean markdown for insertion if needed, or insert raw
+  let insertText = lastRawResponse;
+
+  if (lastTarget.isContentEditable) {
+    lastTarget.innerText = insertText;
+  } else {
+    // For input/textarea, prepend/append or overwrite based on selection? Let's just append for safety, or overwrite if empty.
+    if (lastTarget.value) {
+      lastTarget.value += "\n" + insertText;
+    } else {
+      lastTarget.value = insertText;
+    }
+  }
+
+  // Dispatch events to trigger any JS listeners on the page
+  lastTarget.dispatchEvent(new Event('input', { bubbles: true }));
+  lastTarget.dispatchEvent(new Event('change', { bubbles: true }));
+
+  const btn = document.getElementById('ai-insert-btn');
+  const originalText = btn.textContent;
+  btn.textContent = "Inserted!";
+  setTimeout(() => btn.textContent = originalText, 2000);
+});
+
+// --- Reset Logic ---
+document.getElementById('ai-reset-btn').addEventListener('click', () => {
+  chatHistory = [];
+  lastRawResponse = "";
+  document.getElementById('ai-result').innerHTML = '';
+  document.getElementById('ai-result').style.display = 'none';
+  document.getElementById('ai-user-prompt').value = '';
+  document.getElementById('ai-copy-btn').style.display = 'none';
+  document.getElementById('ai-insert-btn').style.display = 'none';
+
+  // Provide visual feedback
+  const title = document.getElementById('ai-title-text');
+  const orig = title.textContent;
+  title.textContent = "✨ Chat Reset";
+  setTimeout(() => title.textContent = orig, 1000);
 });
 
 // --- Close Logic ---
