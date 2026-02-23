@@ -5,7 +5,6 @@ let lastY = 0;
 let savedSelection = ""; // Fix: Store selection here
 let savedImageSrc = ""; // Store image URL
 let lastRawResponse = ""; // Store raw markdown for copying
-let isPinned = false; // Pin state
 let chatHistory = []; // Local history for current session
 let composeMode = false; // Flag for inline composition
 let lastTarget = null; // Store reference to clicked input/textarea
@@ -44,14 +43,23 @@ popup.style.cssText = `
 
 // Added 'cursor: move' to header
 popup.innerHTML = `
+  <style>
+    .ai-btn-modern {
+      background: #333; border: 1px solid #555; cursor: pointer; color: #ccc;
+      border-radius: 4px; padding: 2px 6px; font-size: 13px; transition: all 0.2s;
+      display: flex; align-items: center; justify-content: center; line-height: 1;
+    }
+    .ai-btn-modern:hover { background: #444; color: #fff; border-color: #777; }
+    .ai-btn-close { color: #eb5757; }
+    .ai-btn-close:hover { background: #5c1e1e; color: #fff; border-color: #eb5757; }
+  </style>
   <div id="ai-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; cursor: move; user-select: none;">
     <div id="ai-title-text" style="font-size: 11px; color: #aaa; text-transform: uppercase; letter-spacing: 0.5px; font-weight: bold;">
       ✨ AskInline
     </div>
     <div style="display: flex; gap: 8px;">
-        <button id="ai-reset-btn" style="background: none; border: none; cursor: pointer; font-size: 14px; color: #555; padding: 0;" title="Reset Chat">🔄</button>
-        <button id="ai-pin-btn" style="background: none; border: none; cursor: pointer; font-size: 14px; color: #555; padding: 0;" title="Pin Modal">📌</button>
-        <button id="ai-close-btn" style="background: none; border: none; cursor: pointer; font-size: 16px; color: #888; padding: 0;">&times;</button>
+        <button id="ai-reset-btn" class="ai-btn-modern" title="Reset Chat">🔄</button>
+        <button id="ai-close-btn" class="ai-btn-modern ai-btn-close" title="Close">&times;</button>
     </div>
   </div>
   
@@ -63,26 +71,26 @@ popup.innerHTML = `
   </div>
 
   <input type="text" id="ai-user-prompt" placeholder="Add additional comments..." 
-    style="width: 100%; margin-top: auto; margin-bottom: 10px; padding: 8px; box-sizing: border-box; 
+    style="width: 100%; margin-top: auto; margin-bottom: 10px; padding: 8px; box-sizing: border-box; font-size: 13px;
            background: #2d2d2d; border: 1px solid #444; color: white; border-radius: 4px; outline: none; flex-shrink: 0;">
   
   <div style="display: flex; gap: 8px; flex-shrink: 0;">
     <button id="ai-submit-btn" 
-        style="flex: 1; background: #007bff; color: white; border: none; padding: 8px; 
-            cursor: pointer; border-radius: 4px; font-weight: 600; transition: background 0.2s;">
+        style="flex: 1; background: #007bff; color: white; border: none; padding: 6px; 
+            cursor: pointer; border-radius: 4px; font-weight: 600; font-size: 13px; transition: background 0.2s;">
         Generate
     </button>
 
     <button id="ai-copy-btn" 
-        style="background: #333; color: #ccc; border: 1px solid #555; padding: 8px 12px; 
-            cursor: pointer; border-radius: 4px; font-weight: 500; font-size: 16px; display: none;"
+        style="background: #333; color: #ccc; border: 1px solid #555; padding: 6px 10px; 
+            cursor: pointer; border-radius: 4px; font-weight: 500; font-size: 14px; display: none;"
         title="Copy Markdown">
         📋
     </button>
     
     <button id="ai-insert-btn" 
-        style="background: #28a745; color: white; border: none; padding: 8px 12px; 
-            cursor: pointer; border-radius: 4px; font-weight: 600; font-size: 14px; display: none;"
+        style="background: #28a745; color: white; border: none; padding: 6px 10px; 
+            cursor: pointer; border-radius: 4px; font-weight: 600; font-size: 13px; display: none;"
         title="Insert into field">
         Insert
     </button>
@@ -130,11 +138,7 @@ browser.runtime.onMessage.addListener((request) => {
 function showPopup(selectionText, imageSrc) {
   savedSelection = selectionText || ""; // Store selection immediately, guard against null
   savedImageSrc = imageSrc || "";
-  isPinned = false; // Reset pin state on new open
   chatHistory = []; // Reset history
-
-  // Update Pin Button Style
-  document.getElementById('ai-pin-btn').style.color = '#555';
 
 
 
@@ -193,31 +197,13 @@ function showPopup(selectionText, imageSrc) {
 document.getElementById('ai-submit-btn').addEventListener('click', () => {
   const inputVal = document.getElementById('ai-user-prompt').value.trim();
 
-  // 2. Formatting Rule (Always included instructions)
-  const styleRule = "Use Markdown formatting. Use **bold** for key terms. Do not overdo it. Keep lists clean.";
+  let fullPrompt = inputVal;
 
-  // 3. Task Rule (Dynamic)
-  let taskRule = "";
-  let fullPrompt = "";
-
-  if (chatHistory.length === 0) {
-    // FIRST TURN: Include System Context Instructions
-    const langRule = "Detect the language of the 'Context' (or the input if empty). Answer strictly in that language. Do NOT mention the language detected, just start the answer immediately.";
-
-    if (composeMode) {
-      taskRule = `The user wants you to write some text based on this request: "${inputVal}". Provide ONLY the requested text without quotes or introductory phrases.`;
-    } else if (inputVal) {
-      taskRule = `User question: "${inputVal}". Answer based on context.`;
-    } else if (savedImageSrc) {
-      taskRule = "Describe this image in detail.";
-    } else {
-      taskRule = "Explain the selected text clearly (approx. 80-100 words). Be comprehensive but concise.";
-    }
-
-    fullPrompt = `${langRule} ${styleRule} ${taskRule}`;
-  } else {
-    // FOLLOW-UP TURN: Just the question
-    fullPrompt = inputVal;
+  let requestType = "selection";
+  if (composeMode) {
+    requestType = "fill";
+  } else if (savedImageSrc) {
+    requestType = "image";
   }
 
   // Show result div when submitting
@@ -236,6 +222,7 @@ document.getElementById('ai-submit-btn').addEventListener('click', () => {
 
   browser.runtime.sendMessage({
     action: "askAI",
+    requestType: requestType,
     context: savedSelection,
     imageSrc: savedImageSrc,
     prompt: fullPrompt,
@@ -289,18 +276,7 @@ document.getElementById('ai-user-prompt').addEventListener('keydown', (e) => {
   }
 });
 
-// --- Pin Logic ---
-document.getElementById('ai-pin-btn').addEventListener('click', () => {
-  isPinned = !isPinned;
-  const pinBtn = document.getElementById('ai-pin-btn');
-  if (isPinned) {
-    pinBtn.style.color = '#007bff'; // Active blue
-    pinBtn.title = "Unpin Modal";
-  } else {
-    pinBtn.style.color = '#555'; // Inactive grey
-    pinBtn.title = "Pin Modal";
-  }
-});
+// --- Pin Logic (Removed) ---
 
 // --- Copy Logic ---
 document.getElementById('ai-copy-btn').addEventListener('click', () => {
@@ -363,9 +339,4 @@ document.getElementById('ai-close-btn').addEventListener('click', () => {
   popup.style.display = 'none';
 });
 
-document.addEventListener('mousedown', (e) => {
-  if (isPinned) return; // Do not close if pinned
-  if (popup.style.display === 'block' && !popup.contains(e.target) && e.target !== header) {
-    popup.style.display = 'none';
-  }
-});
+// Removed mousedown outside-click handler since the modal is now permanently pinned until closed via X.

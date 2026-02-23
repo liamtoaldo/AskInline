@@ -86,3 +86,33 @@ button:hover {
 #status.error {
   color: #d93025;
 }
+
+.model-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+#refresh-models {
+  background-color: transparent;
+  width: auto;
+  padding: 8px;
+  font-size: 16px;
+  border: 1px solid #dadce0;
+  color: #5f6368;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#refresh-models:hover {
+  background-color: #f1f3f4;
+  color: #202124;
+}
+
+#model-status {
+  margin-top: 4px;
+}
+#model-status.error {
+  color: #d93025;
+}

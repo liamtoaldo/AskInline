@@ -62,9 +62,10 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "askAI") {
 
     // Retrieve settings
-    browser.storage.sync.get(["apiKey", "model"]).then(async (result) => {
+    browser.storage.sync.get(["apiKey", "model", "defaultLanguage"]).then(async (result) => {
       const apiKey = result.apiKey;
       const model = result.model || "gemini-2.5-flash-lite";
+      const defaultLanguage = result.defaultLanguage || "";
 
       if (!apiKey) {
         sendResponse({ answer: "Error: API Key is missing. Please set it in the extension options." });
@@ -95,11 +96,37 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
           systemParts.push({ text: `Context: "${request.context}"` });
         }
 
-        // 2. Build History
+        // 2. System Instructions
+        let systemPrompt = "Use Markdown formatting. Use **bold** for key terms. Do not overdo it. Keep lists clean.\\n";
+
+        if (defaultLanguage) {
+          systemPrompt += `Detect the language of the 'Context' (or the user input if empty). If you cannot detect it, answer strictly in ${defaultLanguage}. Do NOT mention the language detected, just start the answer immediately.\\n`;
+        } else {
+          systemPrompt += `Detect the language of the 'Context' (or the user input if empty). Answer strictly in that language. Do NOT mention the language detected, just start the answer immediately.\\n`;
+        }
+
+        if (request.requestType === "fill") {
+          systemPrompt += `You are a writing assistant. The user wants text generated for a form field. Provide ONLY the requested text, without quotes, introductions, or extra commentary. Match the tone and context of the request.`;
+        } else if (request.requestType === "image") {
+          systemPrompt += `You are a visual analysis assistant. The user right-clicked an image and wants a detailed description or analysis. Describe what you see clearly and thoroughly.`;
+        } else {
+          systemPrompt += `You are a helpful assistant. The user selected text on a webpage and wants an explanation or answer related to it. Be concise (~80-100 words) but comprehensive.`;
+        }
+
+        // Determine fallback prompt if input is empty
+        let promptText = request.prompt;
+        if (!promptText) {
+          if (request.requestType === "fill") promptText = "Generate the requested text.";
+          else if (request.requestType === "image") promptText = "Analyze this image.";
+          else promptText = "Explain the context.";
+        }
+
+        // 3. Build History
         if (request.history && request.history.length > 0) {
           // First message must include the system parts + the first user prompt
           let firstUserMsg = request.history[0];
-          let firstParts = [...systemParts, { text: firstUserMsg.text }];
+          // Since history[0] may just be the promptText if empty, or old fullPrompt, we just use it directly
+          let firstParts = [...systemParts, { text: firstUserMsg.text || "Explain" }];
 
           contents.push({ role: "user", parts: firstParts });
 
@@ -111,27 +138,31 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
             });
           }
 
-          // Add current prompt if it's not already in history (it usually isn't)
-          if (request.prompt) {
-            contents.push({ role: "user", parts: [{ text: request.prompt }] });
+          // Add current prompt if it's not already in history
+          if (promptText) {
+            contents.push({ role: "user", parts: [{ text: promptText }] });
           }
 
         } else {
           // No history (First run)
           let parts = [...systemParts];
-          if (request.prompt) parts.push({ text: request.prompt });
-          else parts.push({ text: "Analyze this." }); // Fallback
+          parts.push({ text: promptText });
 
           contents.push({ role: "user", parts: parts });
         }
 
         // Call Google Gemini API
+        const requestBody = {
+          system_instruction: { parts: [{ text: systemPrompt }] },
+          contents: contents
+        };
+
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ contents: contents })
+          body: JSON.stringify(requestBody)
         });
 
         const data = await response.json();
