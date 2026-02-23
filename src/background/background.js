@@ -57,136 +57,200 @@ async function urlToBase64(url) {
   });
 }
 
-// 3. Handle the Gemini API Call
-browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === "askAI") {
+// 3. Handle the Gemini API Call via Port-based Streaming
+browser.runtime.onConnect.addListener((port) => {
+  if (port.name !== "askAI-stream") return;
 
+  port.onMessage.addListener(async (request) => {
     // Retrieve settings
-    browser.storage.sync.get(["apiKey", "model", "defaultLanguage"]).then(async (result) => {
-      const apiKey = result.apiKey;
-      const model = result.model || "gemini-2.5-flash-lite";
-      const defaultLanguage = result.defaultLanguage || "";
+    let result;
+    try {
+      result = await browser.storage.sync.get(["apiKey", "model", "defaultLanguage"]);
+    } catch (e) {
+      port.postMessage({ error: "Error reading settings: " + e.message });
+      return;
+    }
 
-      if (!apiKey) {
-        sendResponse({ answer: "Error: API Key is missing. Please set it in the extension options." });
-        return;
+    const apiKey = result.apiKey;
+    const model = result.model || "gemini-2.5-flash-lite";
+    const defaultLanguage = result.defaultLanguage || "";
+
+    if (!apiKey) {
+      port.postMessage({ error: "Error: API Key is missing. Please set it in the extension options." });
+      return;
+    }
+
+    try {
+      let contents = [];
+      let systemParts = [];
+
+      if (request.imageSrc) {
+        const imageData = await urlToBase64(request.imageSrc);
+        systemParts.push({
+          inline_data: {
+            mime_type: imageData.mimeType,
+            data: imageData.data
+          }
+        });
       }
 
-      try {
-        let contents = [];
+      if (request.context) {
+        systemParts.push({ text: `Context: "${request.context}"` });
+      }
 
-        // 1. Initial Prompt (System Context + First Question)
-        // If history exists, the first item is the context setup. 
-        // We need to reconstruct the conversation for Gemini.
+      // System Instructions
+      let systemPrompt = "Use Markdown formatting. Use **bold** for key terms. Do not overdo it. Keep lists clean.\n";
 
-        let systemParts = [];
+      if (defaultLanguage) {
+        systemPrompt += `Detect the language of the 'Context' (or the user input if empty). If you cannot detect it, answer strictly in ${defaultLanguage}. Do NOT mention the language detected, just start the answer immediately.\n`;
+      } else {
+        systemPrompt += `Detect the language of the 'Context' (or the user input if empty). Answer strictly in that language. Do NOT mention the language detected, just start the answer immediately.\n`;
+      }
 
-        if (request.imageSrc) {
-          const imageData = await urlToBase64(request.imageSrc);
-          systemParts.push({
-            inline_data: {
-              mime_type: imageData.mimeType,
-              data: imageData.data
-            }
+      if (request.requestType === "fill") {
+        systemPrompt += `You are a writing assistant. The user wants text generated for a form field. Provide ONLY the requested text, without quotes, introductions, or extra commentary. Match the tone and context of the request.`;
+      } else if (request.requestType === "image") {
+        systemPrompt += `You are a visual analysis assistant. The user right-clicked an image and wants a detailed description or analysis. Describe what you see clearly and thoroughly.`;
+      } else {
+        systemPrompt += `You are a helpful assistant. The user selected text on a webpage and wants an explanation or answer related to it. Be concise (~80-100 words) but comprehensive.`;
+      }
+
+      // Determine fallback prompt if input is empty
+      let promptText = request.prompt;
+      if (!promptText) {
+        if (request.requestType === "fill") promptText = "Generate the requested text.";
+        else if (request.requestType === "image") promptText = "Analyze this image.";
+        else promptText = "Explain the context.";
+      }
+
+      // Build History
+      if (request.history && request.history.length > 0) {
+        let firstUserMsg = request.history[0];
+        let firstParts = [...systemParts, { text: firstUserMsg.text || "Explain" }];
+        contents.push({ role: "user", parts: firstParts });
+
+        for (let i = 1; i < request.history.length; i++) {
+          contents.push({
+            role: request.history[i].role,
+            parts: [{ text: request.history[i].text }]
           });
         }
 
-        // Add text context
-        if (request.context) {
-          systemParts.push({ text: `Context: "${request.context}"` });
+        if (promptText) {
+          contents.push({ role: "user", parts: [{ text: promptText }] });
         }
-
-        // 2. System Instructions
-        let systemPrompt = "Use Markdown formatting. Use **bold** for key terms. Do not overdo it. Keep lists clean.\\n";
-
-        if (defaultLanguage) {
-          systemPrompt += `Detect the language of the 'Context' (or the user input if empty). If you cannot detect it, answer strictly in ${defaultLanguage}. Do NOT mention the language detected, just start the answer immediately.\\n`;
-        } else {
-          systemPrompt += `Detect the language of the 'Context' (or the user input if empty). Answer strictly in that language. Do NOT mention the language detected, just start the answer immediately.\\n`;
-        }
-
-        if (request.requestType === "fill") {
-          systemPrompt += `You are a writing assistant. The user wants text generated for a form field. Provide ONLY the requested text, without quotes, introductions, or extra commentary. Match the tone and context of the request.`;
-        } else if (request.requestType === "image") {
-          systemPrompt += `You are a visual analysis assistant. The user right-clicked an image and wants a detailed description or analysis. Describe what you see clearly and thoroughly.`;
-        } else {
-          systemPrompt += `You are a helpful assistant. The user selected text on a webpage and wants an explanation or answer related to it. Be concise (~80-100 words) but comprehensive.`;
-        }
-
-        // Determine fallback prompt if input is empty
-        let promptText = request.prompt;
-        if (!promptText) {
-          if (request.requestType === "fill") promptText = "Generate the requested text.";
-          else if (request.requestType === "image") promptText = "Analyze this image.";
-          else promptText = "Explain the context.";
-        }
-
-        // 3. Build History
-        if (request.history && request.history.length > 0) {
-          // First message must include the system parts + the first user prompt
-          let firstUserMsg = request.history[0];
-          // Since history[0] may just be the promptText if empty, or old fullPrompt, we just use it directly
-          let firstParts = [...systemParts, { text: firstUserMsg.text || "Explain" }];
-
-          contents.push({ role: "user", parts: firstParts });
-
-          // Add the rest
-          for (let i = 1; i < request.history.length; i++) {
-            contents.push({
-              role: request.history[i].role,
-              parts: [{ text: request.history[i].text }]
-            });
-          }
-
-          // Add current prompt if it's not already in history
-          if (promptText) {
-            contents.push({ role: "user", parts: [{ text: promptText }] });
-          }
-
-        } else {
-          // No history (First run)
-          let parts = [...systemParts];
-          parts.push({ text: promptText });
-
-          contents.push({ role: "user", parts: parts });
-        }
-
-        // Call Google Gemini API
-        const requestBody = {
-          system_instruction: { parts: [{ text: systemPrompt }] },
-          contents: contents
-        };
-
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(requestBody)
-        });
-
-        const data = await response.json();
-
-        // Check for errors
-        if (data.error) {
-          sendResponse({ answer: "Error: " + data.error.message });
-          return;
-        }
-
-        // Parse Gemini response structure
-        if (data.candidates && data.candidates.length > 0) {
-          const text = data.candidates[0].content.parts[0].text;
-          sendResponse({ answer: text });
-        } else {
-          sendResponse({ answer: "No response from Gemini." });
-        }
-
-      } catch (error) {
-        sendResponse({ answer: "Error processing request: " + error.message });
+      } else {
+        let parts = [...systemParts];
+        parts.push({ text: promptText });
+        contents.push({ role: "user", parts: parts });
       }
 
-    });
+      // Build request body
+      const requestBody = {
+        system_instruction: { parts: [{ text: systemPrompt }] },
+        contents: contents
+      };
 
-    return true; // Keep channel open for async response
-  }
+      // Use streamGenerateContent with SSE
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody)
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        const errorMsg = errorData?.error?.message || `HTTP ${response.status}`;
+        port.postMessage({ error: "Error: " + errorMsg });
+        return;
+      }
+
+      // Stream SSE response using ReadableStream
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullText = "";
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // Normalize \r\n to \n
+        buffer = buffer.replace(/\r\n/g, "\n");
+
+        // Process complete SSE events (separated by double newlines)
+        const events = buffer.split("\n\n");
+        buffer = events.pop(); // Keep incomplete last chunk in buffer
+
+        for (const event of events) {
+          const lines = event.split("\n");
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              const jsonStr = line.slice(6).trim();
+              if (!jsonStr) continue;
+              try {
+                const data = JSON.parse(jsonStr);
+                if (data.candidates && data.candidates.length > 0) {
+                  const parts = data.candidates[0].content?.parts;
+                  if (parts && parts.length > 0 && parts[0].text) {
+                    const chunk = parts[0].text;
+                    fullText += chunk;
+                    try {
+                      port.postMessage({ chunk: chunk });
+                    } catch (postErr) {
+                      console.warn("AskInline: Port disconnected during streaming", postErr);
+                      return;
+                    }
+                  }
+                }
+              } catch (parseErr) {
+                console.warn("AskInline: Failed to parse SSE chunk:", jsonStr, parseErr);
+              }
+            }
+          }
+        }
+      }
+
+      // Process any remaining buffer
+      if (buffer.trim()) {
+        const lines = buffer.replace(/\r\n/g, "\n").split("\n");
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const jsonStr = line.slice(6).trim();
+            if (!jsonStr) continue;
+            try {
+              const data = JSON.parse(jsonStr);
+              if (data.candidates && data.candidates.length > 0) {
+                const parts = data.candidates[0].content?.parts;
+                if (parts && parts.length > 0 && parts[0].text) {
+                  fullText += parts[0].text;
+                  try { port.postMessage({ chunk: parts[0].text }); } catch (e) { return; }
+                }
+              }
+            } catch (e) { }
+          }
+        }
+      }
+
+      // Send completion signal
+      if (fullText) {
+        port.postMessage({ done: true, fullText: fullText });
+      } else {
+        port.postMessage({ error: "No response from Gemini." });
+      }
+
+    } catch (error) {
+      console.error("AskInline streaming error:", error);
+      try {
+        port.postMessage({ error: "Error processing request: " + error.message });
+      } catch (e) {
+        // Port already disconnected
+      }
+    }
+  });
 });

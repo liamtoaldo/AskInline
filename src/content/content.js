@@ -31,17 +31,16 @@ popup.style.cssText = `
   padding: 12px; 
   box-shadow: 0 10px 25px rgba(0,0,0,0.5); 
   border-radius: 8px;
-  width: 320px; 
-  min-width: 250px;
-  min-height: 200px;
+  width: 360px; 
+  height: 420px;
+  min-width: 280px;
+  min-height: 220px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
   display: none; 
   flex-direction: column;
-  resize: both; 
   overflow: hidden;
 `;
 
-// Added 'cursor: move' to header
 popup.innerHTML = `
   <style>
     .ai-btn-modern {
@@ -52,8 +51,62 @@ popup.innerHTML = `
     .ai-btn-modern:hover { background: #444; color: #fff; border-color: #777; }
     .ai-btn-close { color: #eb5757; }
     .ai-btn-close:hover { background: #5c1e1e; color: #fff; border-color: #eb5757; }
+    
+    /* Blinking cursor for streaming */
+    @keyframes ai-blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+    .ai-stream-cursor {
+      display: inline;
+      color: #007bff;
+      animation: ai-blink 0.8s step-end infinite;
+      font-weight: bold;
+    }
+
+    /* Custom resize handles */
+    .ai-resize-handle {
+      position: absolute;
+      z-index: 2147483647;
+    }
+    .ai-resize-right {
+      top: 0; right: -4px; width: 8px; height: 100%;
+      cursor: ew-resize;
+    }
+    .ai-resize-bottom {
+      bottom: -4px; left: 0; width: 100%; height: 8px;
+      cursor: ns-resize;
+    }
+    .ai-resize-corner {
+      bottom: -4px; right: -4px; width: 16px; height: 16px;
+      cursor: nwse-resize;
+    }
+
+    /* Selection preview styles */
+    #sel-preview {
+      font-size: 13px; color: #bbb; margin-bottom: 10px;
+      border-left: 3px solid #007bff; padding: 6px 8px;
+      background: rgba(0, 123, 255, 0.06); border-radius: 0 4px 4px 0;
+      position: relative; cursor: default;
+      max-height: 60px; overflow: hidden;
+      transition: max-height 0.3s ease;
+      line-height: 1.4;
+      word-break: break-word;
+    }
+    #sel-preview.ai-expanded {
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    #sel-preview-toggle {
+      display: none;
+      font-size: 11px; color: #007bff; cursor: pointer;
+      margin-top: 2px; margin-bottom: 6px;
+      user-select: none;
+    }
+    #sel-preview-toggle:hover { color: #3399ff; }
   </style>
-  <div id="ai-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; cursor: move; user-select: none;">
+
+  <div id="ai-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; cursor: move; user-select: none; flex-shrink: 0;">
     <div id="ai-title-text" style="font-size: 11px; color: #aaa; text-transform: uppercase; letter-spacing: 0.5px; font-weight: bold;">
       ✨ AskInline
     </div>
@@ -63,16 +116,17 @@ popup.innerHTML = `
     </div>
   </div>
   
-  <div id="sel-preview" style="font-size: 13px; color: #bbb; margin-bottom: 12px; font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 2px solid #007bff; padding-left: 5px;">...</div>
+  <div id="sel-preview">...</div>
+  <div id="sel-preview-toggle">▼ Show more</div>
   
   <div id="ai-result" 
-    style="margin-bottom: 12px; font-size: 14px; line-height: 1.5; flex-grow: 1; overflow-y: auto; overflow-wrap: anywhere;
+    style="margin-bottom: 10px; font-size: 14px; line-height: 1.6; flex: 1 1 0; overflow-y: auto; overflow-wrap: anywhere;
            background: #252526; padding: 10px; border-radius: 4px; border: 1px solid #333; display:none; color: #ddd; min-height: 0;">
   </div>
 
   <input type="text" id="ai-user-prompt" placeholder="Add additional comments..." 
-    style="width: 100%; margin-top: auto; margin-bottom: 10px; padding: 8px; box-sizing: border-box; font-size: 13px;
-           background: #2d2d2d; border: 1px solid #444; color: white; border-radius: 4px; outline: none; flex-shrink: 0;">
+    style="width: 100%; margin-bottom: 10px; padding: 8px; box-sizing: border-box; font-size: 13px;
+           background: #2d2d2d; border: 1px solid #444; color: white; border-radius: 4px; outline: none; flex-shrink: 0; margin-top: auto;">
   
   <div style="display: flex; gap: 8px; flex-shrink: 0;">
     <button id="ai-submit-btn" 
@@ -95,16 +149,20 @@ popup.innerHTML = `
         Insert
     </button>
   </div>
+
+  <!-- Custom Resize Handles -->
+  <div class="ai-resize-handle ai-resize-right" data-resize="right"></div>
+  <div class="ai-resize-handle ai-resize-bottom" data-resize="bottom"></div>
+  <div class="ai-resize-handle ai-resize-corner" data-resize="corner"></div>
 `;
 
 document.body.appendChild(popup);
 
-// --- Movable Logic (Minimal) ---
+// --- Movable Logic ---
 const header = popup.querySelector('#ai-header');
 let isDragging = false, offsetX = 0, offsetY = 0;
 
 header.addEventListener('mousedown', (e) => {
-  // Prevent dragging if clicking on buttons
   if (e.target.tagName === 'BUTTON') return;
   isDragging = true;
   offsetX = e.clientX - popup.getBoundingClientRect().left;
@@ -113,13 +171,60 @@ header.addEventListener('mousedown', (e) => {
 
 document.addEventListener('mousemove', (e) => {
   if (isDragging) {
-    // Fixed positioning logic: direct client coordinates
     popup.style.left = (e.clientX - offsetX) + 'px';
     popup.style.top = (e.clientY - offsetY) + 'px';
   }
 });
 
 document.addEventListener('mouseup', () => isDragging = false);
+
+// --- Custom Resize Logic ---
+let isResizing = false;
+let resizeDir = null;
+let resizeStartX = 0, resizeStartY = 0;
+let resizeStartW = 0, resizeStartH = 0;
+
+popup.querySelectorAll('.ai-resize-handle').forEach(handle => {
+  handle.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    isResizing = true;
+    resizeDir = handle.dataset.resize;
+    resizeStartX = e.clientX;
+    resizeStartY = e.clientY;
+    resizeStartW = popup.offsetWidth;
+    resizeStartH = popup.offsetHeight;
+  });
+});
+
+document.addEventListener('mousemove', (e) => {
+  if (!isResizing) return;
+  const dx = e.clientX - resizeStartX;
+  const dy = e.clientY - resizeStartY;
+
+  if (resizeDir === 'right' || resizeDir === 'corner') {
+    const newW = Math.max(280, resizeStartW + dx);
+    popup.style.width = newW + 'px';
+  }
+  if (resizeDir === 'bottom' || resizeDir === 'corner') {
+    const newH = Math.max(220, resizeStartH + dy);
+    popup.style.height = newH + 'px';
+  }
+});
+
+document.addEventListener('mouseup', () => {
+  isResizing = false;
+  resizeDir = null;
+});
+
+// --- Selection Preview Toggle ---
+const selPreview = popup.querySelector('#sel-preview');
+const selToggle = popup.querySelector('#sel-preview-toggle');
+
+selToggle.addEventListener('click', () => {
+  const isExpanded = selPreview.classList.toggle('ai-expanded');
+  selToggle.textContent = isExpanded ? '▲ Show less' : '▼ Show more';
+});
 
 
 // --- Listen for Background Trigger ---
@@ -136,36 +241,29 @@ browser.runtime.onMessage.addListener((request) => {
 });
 
 function showPopup(selectionText, imageSrc) {
-  savedSelection = selectionText || ""; // Store selection immediately, guard against null
+  savedSelection = selectionText || "";
   savedImageSrc = imageSrc || "";
-  chatHistory = []; // Reset history
-
-
+  chatHistory = [];
 
   // Smart Positioning: Keep inside Viewport
   const viewportWidth = window.innerWidth;
   const viewportHeight = window.innerHeight;
-  const popupW = 346; // approx width + padding + border
-  const popupH = 400; // estimated max height
+  const popupW = 380;
+  const popupH = 440;
 
-  // Fixed positioning logic: use ClientX/Y immediately, no scroll offset needed
-  // lastX/Y from contextmenu are pageX/Y, so we subtract scroll to get viewport relative
   let viewportX = lastX - window.scrollX;
   let viewportY = lastY - window.scrollY;
 
-  // X axis: prevent overflow right
   let left = viewportX;
   if (viewportX + popupW > viewportWidth) {
     left = viewportWidth - popupW - 10;
   }
 
-  // Y axis: flip up if overflow bottom
   let top = viewportY + 10;
   if (viewportY + 10 + popupH > viewportHeight) {
     top = viewportY - popupH;
   }
 
-  // Safety clamps
   if (left < 0) left = 10;
   if (top < 0) top = 10;
 
@@ -173,32 +271,56 @@ function showPopup(selectionText, imageSrc) {
   popup.style.top = top + 'px';
   popup.style.display = 'flex';
 
+  // --- Selection Preview ---
+  const preview = document.getElementById('sel-preview');
+  const toggle = document.getElementById('sel-preview-toggle');
+  preview.classList.remove('ai-expanded');
+  toggle.style.display = 'none';
+  toggle.textContent = '▼ Show more';
+
   if (savedImageSrc) {
-    document.getElementById('sel-preview').innerHTML = `<img src="${savedImageSrc}" style="max-height: 100px; display: block; border-radius: 4px;">`;
+    preview.innerHTML = `<img src="${savedImageSrc}" style="max-height: 100px; display: block; border-radius: 4px;">`;
+  } else if (savedSelection) {
+    const safeText = savedSelection.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    preview.innerHTML = `<span style="color: #999; margin-right: 4px;">📎</span>${safeText}`;
+    // Show toggle if text is long enough to overflow
+    requestAnimationFrame(() => {
+      if (preview.scrollHeight > preview.clientHeight + 2) {
+        toggle.style.display = 'block';
+      }
+    });
   } else {
-    const safeSelection = savedSelection || "";
-    const preview = safeSelection.length > 50 ? safeSelection.substring(0, 50) + '...' : safeSelection;
-    document.getElementById('sel-preview').textContent = preview;
+    preview.innerHTML = '<span style="color: #666;">No selection</span>';
   }
 
-
-
   const resultDiv = document.getElementById('ai-result');
-  resultDiv.style.display = 'none'; // Initially hidden
-  resultDiv.innerHTML = ''; // Clear chat
-  document.getElementById('ai-copy-btn').style.display = 'none'; // Hide copy button on new open
-  document.getElementById('ai-insert-btn').style.display = 'none'; // Hide insert button on new open
+  resultDiv.style.display = 'none';
+  resultDiv.innerHTML = '';
+  document.getElementById('ai-copy-btn').style.display = 'none';
+  document.getElementById('ai-insert-btn').style.display = 'none';
   document.getElementById('ai-user-prompt').value = '';
 
   setTimeout(() => document.getElementById('ai-user-prompt').focus(), 100);
 }
 
-// --- Submit Logic ---
+// --- Markdown Renderer ---
+function renderMarkdown(raw) {
+  return raw
+    .replace(/^### (.*$)/gim, '<h3 style="margin: 10px 0 5px; font-size: 16px; color: #fff;">$1</h3>')
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/(\*|_)(.*?)\1/g, '<em>$2</em>')
+    .replace(/`(.*?)`/g, '<code style="background:#333; padding:2px 4px; border-radius:3px; font-family:monospace; color: #ffcc00;">$1</code>')
+    .replace(/^\s*[\-\*]\s+(.*)$/gm, '<div style="margin-left: 10px;">• $1</div>')
+    .replace(/\n/g, ' ');
+}
+
+// --- Submit Logic (Streaming via Port) ---
+let activePort = null; // Track active streaming port
+
 document.getElementById('ai-submit-btn').addEventListener('click', () => {
   const inputVal = document.getElementById('ai-user-prompt').value.trim();
 
   let fullPrompt = inputVal;
-
   let requestType = "selection";
   if (composeMode) {
     requestType = "fill";
@@ -206,7 +328,7 @@ document.getElementById('ai-submit-btn').addEventListener('click', () => {
     requestType = "image";
   }
 
-  // Show result div when submitting
+  // Show result div
   const resultDiv = document.getElementById('ai-result');
   resultDiv.style.display = 'block';
 
@@ -215,57 +337,67 @@ document.getElementById('ai-submit-btn').addEventListener('click', () => {
   resultDiv.innerHTML += `<div style="text-align: right; margin-bottom: 8px;"><span style="background: #0044cc; color: white; padding: 6px 10px; border-radius: 12px 12px 2px 12px; display: inline-block; font-size: 13px;">${userMsg}</span></div>`;
   resultDiv.scrollTop = resultDiv.scrollHeight;
 
-  // Render Loading
-  const loadingId = 'loading-' + Date.now();
-  resultDiv.innerHTML += `<div id="${loadingId}" style="text-align: left; margin-bottom: 8px;"><span style="color: #888; font-style: italic;">Thinking...</span></div>`;
+  // Create streaming response container
+  const responseId = 'response-' + Date.now();
+  resultDiv.innerHTML += `<div id="${responseId}" style="text-align: left; margin-bottom: 20px; color: #e0e0e0; font-size: 14px; line-height: 1.6;"><span class="ai-stream-cursor">▌</span></div>`;
   resultDiv.scrollTop = resultDiv.scrollHeight;
 
-  browser.runtime.sendMessage({
-    action: "askAI",
+  // Disable submit during streaming
+  const submitBtn = document.getElementById('ai-submit-btn');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Streaming...';
+  submitBtn.style.opacity = '0.6';
+
+  // Open port to background
+  activePort = browser.runtime.connect({ name: "askAI-stream" });
+  let streamBuffer = "";
+
+  activePort.onMessage.addListener((msg) => {
+    const responseEl = document.getElementById(responseId);
+    if (!responseEl) return;
+
+    if (msg.chunk) {
+      streamBuffer += msg.chunk;
+      responseEl.innerHTML = renderMarkdown(streamBuffer) + '<span class="ai-stream-cursor">▌</span>';
+      resultDiv.scrollTop = resultDiv.scrollHeight;
+    } else if (msg.done) {
+      lastRawResponse = msg.fullText;
+      responseEl.innerHTML = renderMarkdown(msg.fullText);
+      resultDiv.scrollTop = resultDiv.scrollHeight;
+
+      // Add to history
+      chatHistory.push({ role: "user", text: fullPrompt });
+      chatHistory.push({ role: "model", text: msg.fullText });
+
+      document.getElementById('ai-copy-btn').style.display = 'block';
+      if (composeMode && lastTarget) {
+        document.getElementById('ai-insert-btn').style.display = 'block';
+      }
+
+      // Re-enable submit
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Generate';
+      submitBtn.style.opacity = '1';
+      activePort = null;
+    } else if (msg.error) {
+      responseEl.innerHTML = `<span style="color: #ff5555;">${msg.error}</span>`;
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Generate';
+      submitBtn.style.opacity = '1';
+      activePort = null;
+    }
+  });
+
+  // Send the request via port
+  activePort.postMessage({
     requestType: requestType,
     context: savedSelection,
     imageSrc: savedImageSrc,
     prompt: fullPrompt,
     history: chatHistory
-  }, (response) => {
-    // Remove Loading
-    const loadingEl = document.getElementById(loadingId);
-    if (loadingEl) loadingEl.remove();
-
-    if (response && response.answer) {
-      lastRawResponse = response.answer; // Save mostly for copy (last one)
-      let safeText = response.answer
-        // 1. Intestazioni (### Titolo)
-        .replace(/^### (.*$)/gim, '<h3 style="margin: 10px 0 5px; font-size: 16px; color: #fff;">$1</h3>')
-        // 2. Grassetto (**testo**)
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        // 3. Corsivo (*testo* oppure _testo_)
-        .replace(/(\*|_)(.*?)\1/g, '<em>$2</em>')
-        // 4. Codice inline (`codice`) - Con sfondo scuro per risaltare
-        .replace(/`(.*?)`/g, '<code style="background:#333; padding:2px 4px; border-radius:3px; font-family:monospace; color: #ffcc00;">$1</code>')
-        // 5. Elenchi puntati (Linee che iniziano con - o *)
-        .replace(/^\s*[\-\*]\s+(.*)$/gm, '<div style="margin-left: 10px;">• $1</div>')
-        // 6. Converti i restanti "a capo" in <br>
-        .replace(/\n/g, ' ');
-
-      // Render AI Response (No Bubble - ChatGPT style)
-      resultDiv.innerHTML += `<div style="text-align: left; margin-bottom: 20px; color: #e0e0e0; font-size: 14px; line-height: 1.6;">${safeText}</div>`;
-      resultDiv.scrollTop = resultDiv.scrollHeight;
-
-      // Add to History
-      chatHistory.push({ role: "user", text: fullPrompt });
-      chatHistory.push({ role: "model", text: response.answer }); // Save raw answer
-
-      document.getElementById('ai-copy-btn').style.display = 'block'; // Show copy button
-      if (composeMode && lastTarget) {
-        document.getElementById('ai-insert-btn').style.display = 'block'; // Show insert button
-      }
-    } else {
-      resultDiv.innerHTML += `<div style="color: #ff5555; font-size: 13px;">Error: No response.</div>`;
-    }
   });
 
-  document.getElementById('ai-user-prompt').value = ''; // Clear input
+  document.getElementById('ai-user-prompt').value = '';
 });
 
 // --- Enter Key Logic ---
@@ -275,8 +407,6 @@ document.getElementById('ai-user-prompt').addEventListener('keydown', (e) => {
     document.getElementById('ai-submit-btn').click();
   }
 });
-
-// --- Pin Logic (Removed) ---
 
 // --- Copy Logic ---
 document.getElementById('ai-copy-btn').addEventListener('click', () => {
@@ -293,13 +423,11 @@ document.getElementById('ai-copy-btn').addEventListener('click', () => {
 document.getElementById('ai-insert-btn').addEventListener('click', () => {
   if (!lastRawResponse || !lastTarget) return;
 
-  // Clean markdown for insertion if needed, or insert raw
   let insertText = lastRawResponse;
 
   if (lastTarget.isContentEditable) {
     lastTarget.innerText = insertText;
   } else {
-    // For input/textarea, prepend/append or overwrite based on selection? Let's just append for safety, or overwrite if empty.
     if (lastTarget.value) {
       lastTarget.value += "\n" + insertText;
     } else {
@@ -307,7 +435,6 @@ document.getElementById('ai-insert-btn').addEventListener('click', () => {
     }
   }
 
-  // Dispatch events to trigger any JS listeners on the page
   lastTarget.dispatchEvent(new Event('input', { bubbles: true }));
   lastTarget.dispatchEvent(new Event('change', { bubbles: true }));
 
@@ -327,7 +454,6 @@ document.getElementById('ai-reset-btn').addEventListener('click', () => {
   document.getElementById('ai-copy-btn').style.display = 'none';
   document.getElementById('ai-insert-btn').style.display = 'none';
 
-  // Provide visual feedback
   const title = document.getElementById('ai-title-text');
   const orig = title.textContent;
   title.textContent = "✨ Chat Reset";
@@ -337,6 +463,9 @@ document.getElementById('ai-reset-btn').addEventListener('click', () => {
 // --- Close Logic ---
 document.getElementById('ai-close-btn').addEventListener('click', () => {
   popup.style.display = 'none';
+  // Disconnect any active stream
+  if (activePort) {
+    try { activePort.disconnect(); } catch (e) { }
+    activePort = null;
+  }
 });
-
-// Removed mousedown outside-click handler since the modal is now permanently pinned until closed via X.
