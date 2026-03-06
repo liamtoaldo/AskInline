@@ -22,97 +22,27 @@ document.addEventListener("contextmenu", (e) => {
 // --- Create Pop-up (Dark Theme) ---
 const popup = document.createElement('div');
 popup.id = 'gemini-inline-popup';
-popup.style.cssText = `
-  position: fixed; 
-  z-index: 2147483647; 
-  background: #1e1e1e; 
-  border: 1px solid #444; 
-  color: #e0e0e0;
-  padding: 12px; 
-  box-shadow: 0 10px 25px rgba(0,0,0,0.5); 
-  border-radius: 8px;
-  width: 360px; 
-  height: 420px;
-  min-width: 280px;
-  min-height: 220px;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
-  display: none; 
-  flex-direction: column;
-  overflow: hidden;
-`;
+// CSS is now loaded from content.css
 
 popup.innerHTML = `
-  <style>
-    .ai-btn-modern {
-      background: #333; border: 1px solid #555; cursor: pointer; color: #ccc;
-      border-radius: 4px; padding: 2px 6px; font-size: 13px; transition: all 0.2s;
-      display: flex; align-items: center; justify-content: center; line-height: 1;
-    }
-    .ai-btn-modern:hover { background: #444; color: #fff; border-color: #777; }
-    .ai-btn-close { color: #eb5757; }
-    .ai-btn-close:hover { background: #5c1e1e; color: #fff; border-color: #eb5757; }
-    
-    /* Blinking cursor for streaming */
-    @keyframes ai-blink {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0; }
-    }
-    .ai-stream-cursor {
-      display: inline;
-      color: #007bff;
-      animation: ai-blink 0.8s step-end infinite;
-      font-weight: bold;
-    }
-
-    /* Custom resize handles */
-    .ai-resize-handle {
-      position: absolute;
-      z-index: 2147483647;
-    }
-    .ai-resize-right {
-      top: 0; right: -4px; width: 8px; height: 100%;
-      cursor: ew-resize;
-    }
-    .ai-resize-bottom {
-      bottom: -4px; left: 0; width: 100%; height: 8px;
-      cursor: ns-resize;
-    }
-    .ai-resize-corner {
-      bottom: -4px; right: -4px; width: 16px; height: 16px;
-      cursor: nwse-resize;
-    }
-
-    /* Selection preview styles */
-    #sel-preview {
-      font-size: 13px; color: #bbb; margin-bottom: 10px;
-      border-left: 3px solid #007bff; padding: 6px 8px;
-      background: rgba(0, 123, 255, 0.06); border-radius: 0 4px 4px 0;
-      position: relative; cursor: default;
-      max-height: 60px; overflow: hidden;
-      transition: max-height 0.3s ease;
-      line-height: 1.4;
-      word-break: break-word;
-    }
-    #sel-preview.ai-expanded {
-      max-height: 300px;
-      overflow-y: auto;
-    }
-    #sel-preview-toggle {
-      display: none;
-      font-size: 11px; color: #007bff; cursor: pointer;
-      margin-top: 2px; margin-bottom: 6px;
-      user-select: none;
-    }
-    #sel-preview-toggle:hover { color: #3399ff; }
-  </style>
-
   <div id="ai-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; cursor: move; user-select: none; flex-shrink: 0;">
     <div id="ai-title-text" style="font-size: 11px; color: #aaa; text-transform: uppercase; letter-spacing: 0.5px; font-weight: bold;">
       ✨ AskInline
     </div>
     <div style="display: flex; gap: 8px;">
-        <button id="ai-reset-btn" class="ai-btn-modern" title="Reset Chat">🔄</button>
-        <button id="ai-close-btn" class="ai-btn-modern ai-btn-close" title="Close">&times;</button>
+        <button id="ai-reset-btn" class="ai-btn-modern" title="Reset Chat">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M23 4v6h-6"></path>
+            <path d="M1 20v-6h6"></path>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+          </svg>
+        </button>
+        <button id="ai-close-btn" class="ai-btn-modern ai-btn-close" title="Close">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
     </div>
   </div>
   
@@ -124,9 +54,10 @@ popup.innerHTML = `
            background: #252526; padding: 10px; border-radius: 4px; border: 1px solid #333; display:none; color: #ddd; min-height: 0;">
   </div>
 
-  <input type="text" id="ai-user-prompt" placeholder="Add additional comments..." 
+  <textarea id="ai-user-prompt" placeholder="Add additional comments..." 
     style="width: 100%; margin-bottom: 10px; padding: 8px; box-sizing: border-box; font-size: 13px;
-           background: #2d2d2d; border: 1px solid #444; color: white; border-radius: 4px; outline: none; flex-shrink: 0; margin-top: auto;">
+           background: #2d2d2d; border: 1px solid #444; color: white; border-radius: 4px; outline: none; 
+           flex-shrink: 0; margin-top: auto; resize: none; overflow: hidden; height: 34px; line-height: 1.4; font-family: inherit;"></textarea>
   
   <div style="display: flex; gap: 8px; flex-shrink: 0;">
     <button id="ai-submit-btn" 
@@ -135,12 +66,7 @@ popup.innerHTML = `
         Generate
     </button>
 
-    <button id="ai-copy-btn" 
-        style="background: #333; color: #ccc; border: 1px solid #555; padding: 6px 10px; 
-            cursor: pointer; border-radius: 4px; font-weight: 500; font-size: 14px; display: none;"
-        title="Copy Markdown">
-        📋
-    </button>
+    <!-- Legacy Copy Button Removed -->
     
     <button id="ai-insert-btn" 
         style="background: #28a745; color: white; border: none; padding: 6px 10px; 
@@ -163,7 +89,7 @@ const header = popup.querySelector('#ai-header');
 let isDragging = false, offsetX = 0, offsetY = 0;
 
 header.addEventListener('mousedown', (e) => {
-  if (e.target.tagName === 'BUTTON') return;
+  if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
   isDragging = true;
   offsetX = e.clientX - popup.getBoundingClientRect().left;
   offsetY = e.clientY - popup.getBoundingClientRect().top;
@@ -306,12 +232,13 @@ function showPopup(selectionText, imageSrc) {
 // --- Markdown Renderer ---
 function renderMarkdown(raw) {
   return raw
+    .replace(/```(\w+)?\n([\s\S]*?)```/g, '<pre style="background: #111; padding: 10px; border-radius: 4px; overflow-x: auto; margin: 8px 0;"><div style="color: #666; font-size: 10px; margin-bottom: 4px; text-transform: uppercase;">$1</div><code style="font-family: monospace; color: #ffcc00; display: block;">$2</code></pre>')
     .replace(/^### (.*$)/gim, '<h3 style="margin: 10px 0 5px; font-size: 16px; color: #fff;">$1</h3>')
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/(\*|_)(.*?)\1/g, '<em>$2</em>')
     .replace(/`(.*?)`/g, '<code style="background:#333; padding:2px 4px; border-radius:3px; font-family:monospace; color: #ffcc00;">$1</code>')
     .replace(/^\s*[\-\*]\s+(.*)$/gm, '<div style="margin-left: 10px;">• $1</div>')
-    .replace(/\n/g, ' ');
+    .replace(/\n/g, '<br>');
 }
 
 // --- Submit Logic (Streaming via Port) ---
@@ -363,13 +290,36 @@ document.getElementById('ai-submit-btn').addEventListener('click', () => {
     } else if (msg.done) {
       lastRawResponse = msg.fullText;
       responseEl.innerHTML = renderMarkdown(msg.fullText);
+      
+      // Append Copy Button for this specific response
+      const copyBtn = document.createElement('button');
+      copyBtn.className = 'ai-copy-response';
+      copyBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events: none;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
+      copyBtn.style.cssText = 'background: transparent; border: none; cursor: pointer; color: #666; padding: 4px; float: right; margin-left: 8px; transition: color 0.2s;';
+      copyBtn.title = "Copy this response";
+      copyBtn.onclick = () => {
+        navigator.clipboard.writeText(msg.fullText).then(() => {
+          const original = copyBtn.innerHTML;
+          copyBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4caf50" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+          copyBtn.style.color = '#4caf50';
+          setTimeout(() => {
+            copyBtn.innerHTML = original;
+            copyBtn.style.color = '#666';
+          }, 2000);
+        });
+      };
+      
+      // Insert button at the top of the response or after text? 
+      // Let's prepend it so it floats right at the top
+      responseEl.insertBefore(copyBtn, responseEl.firstChild);
+      
       resultDiv.scrollTop = resultDiv.scrollHeight;
 
       // Add to history
       chatHistory.push({ role: "user", text: fullPrompt });
       chatHistory.push({ role: "model", text: msg.fullText });
 
-      document.getElementById('ai-copy-btn').style.display = 'block';
+      // document.getElementById('ai-copy-btn').style.display = 'block'; // Legacy global copy button
       if (composeMode && lastTarget) {
         document.getElementById('ai-insert-btn').style.display = 'block';
       }
@@ -400,24 +350,28 @@ document.getElementById('ai-submit-btn').addEventListener('click', () => {
   document.getElementById('ai-user-prompt').value = '';
 });
 
+// --- Auto-Resize Textarea Logic ---
+const promptInput = document.getElementById('ai-user-prompt');
+
+promptInput.addEventListener('input', () => {
+  promptInput.style.height = 'auto';
+  promptInput.style.height = (Math.min(promptInput.scrollHeight, 80)) + 'px'; // Max height approx 3-4 lines
+  if (promptInput.scrollHeight > 80) {
+    promptInput.style.overflowY = 'auto';
+  } else {
+    promptInput.style.overflowY = 'hidden';
+  }
+});
+
 // --- Enter Key Logic ---
-document.getElementById('ai-user-prompt').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
+promptInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
     document.getElementById('ai-submit-btn').click();
   }
 });
 
-// --- Copy Logic ---
-document.getElementById('ai-copy-btn').addEventListener('click', () => {
-  if (!lastRawResponse) return;
-  navigator.clipboard.writeText(lastRawResponse).then(() => {
-    const btn = document.getElementById('ai-copy-btn');
-    const originalText = btn.textContent;
-    btn.textContent = "✅";
-    setTimeout(() => btn.textContent = originalText, 2000);
-  });
-});
+/* Legacy Copy Logic Removed */
 
 // --- Insert Logic ---
 document.getElementById('ai-insert-btn').addEventListener('click', () => {
