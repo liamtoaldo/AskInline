@@ -120,7 +120,7 @@ async function loadShortcut() {
             document.getElementById("shortcut-keys").textContent = "Not set";
         }
     } catch (e) {
-        document.getElementById("shortcut-keys").textContent = "Ctrl+Shift+A (default)";
+        document.getElementById("shortcut-keys").textContent = "Ctrl+Alt+A (default)";
     }
 }
 
