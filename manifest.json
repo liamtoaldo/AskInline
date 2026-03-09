@@ -4,7 +4,12 @@
   "name": "AskInline",
   "browser_specific_settings": {
     "gecko": {
-      "id": "kzouts951@mozmail.com"
+      "id": "kzouts951@mozmail.com",
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
+      }
     }
   },
   "description": "Right-click selected text to Ask Gemini AI. Inline AI assistant with streaming responses, markdown rendering, and syntax highlighting.",
