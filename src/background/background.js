@@ -1,22 +1,24 @@
+// background.js — AskInline Background Script
+
 // 1. Create the Context Menus
 // Text Selection
 browser.contextMenus.create({
   id: "ask-gemini-selection",
-  title: "💫 AskInline about selection",
+  title: "AskInline about selection",
   contexts: ["selection"]
 });
 
 // Image
 browser.contextMenus.create({
   id: "ask-gemini-image",
-  title: "🖼️ AskInline about this image",
+  title: "AskInline about this image",
   contexts: ["image"]
 });
 
 // Editable (Inputs, Textareas)
 browser.contextMenus.create({
   id: "ask-gemini-fill",
-  title: "✨ AskInline to write here",
+  title: "AskInline to write here",
   contexts: ["editable"]
 });
 
@@ -40,6 +42,33 @@ browser.contextMenus.onClicked.addListener((info, tab) => {
   }
 });
 
+// 3. Keyboard Shortcut
+browser.commands.onCommand.addListener((command) => {
+  if (command === "ask-inline-shortcut") {
+    browser.tabs.query({ active: true, currentWindow: true }).then(tabs => {
+      if (tabs[0]) {
+        browser.tabs.sendMessage(tabs[0].id, {
+          action: "shortcutTriggered"
+        }).catch(err => {
+          console.warn("AskInline: Could not trigger shortcut on this page.", err);
+        });
+      }
+    });
+  }
+});
+
+// 4. Onboarding — First Install
+browser.runtime.onInstalled.addListener((details) => {
+  if (details.reason === "install") {
+    // Check if API key is already set (unlikely on first install)
+    browser.storage.sync.get(["apiKey"]).then(result => {
+      if (!result.apiKey) {
+        browser.runtime.openOptionsPage();
+      }
+    });
+  }
+});
+
 // Helper: Fetch image and convert to Base64
 async function urlToBase64(url) {
   const response = await fetch(url);
@@ -57,7 +86,7 @@ async function urlToBase64(url) {
   });
 }
 
-// 3. Handle the Gemini API Call via Port-based Streaming
+// 5. Handle the Gemini API Call via Port-based Streaming
 browser.runtime.onConnect.addListener((port) => {
   if (port.name !== "askAI-stream") return;
 
@@ -152,12 +181,21 @@ browser.runtime.onConnect.addListener((port) => {
       };
 
       // Use streamGenerateContent with SSE
+      const controller = new AbortController();
+      const signal = controller.signal;
+
+      const onDisconnectAbortion = () => {
+        controller.abort("User clicked stop");
+      };
+      port.onDisconnect.addListener(onDisconnectAbortion);
+
       const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(requestBody)
+          body: JSON.stringify(requestBody),
+          signal: signal
         }
       );
 
@@ -245,12 +283,19 @@ browser.runtime.onConnect.addListener((port) => {
       }
 
     } catch (error) {
+      if (error.name === 'AbortError') {
+        // Stream was stopped by user
+        return;
+      }
+
       console.error("AskInline streaming error:", error);
       try {
         port.postMessage({ error: "Error processing request: " + error.message });
       } catch (e) {
         // Port already disconnected
       }
+    } finally {
+      port.onDisconnect.removeListener(onDisconnectAbortion);
     }
   });
 });

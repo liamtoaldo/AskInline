@@ -1,3 +1,5 @@
+// options.js — AskInline Options Page
+
 // Fetch available models from Gemini API
 async function fetchModels(apiKey) {
     const modelSelect = document.querySelector("#model");
@@ -38,7 +40,7 @@ async function fetchModels(apiKey) {
             if (Array.from(modelSelect.options).some(opt => opt.value === currentModel)) {
                 modelSelect.value = currentModel;
             } else if (supportedModels.length > 0) {
-                modelSelect.value = supportedModels[0].name.replace("models/", ""); // fallback
+                modelSelect.value = supportedModels[0].name.replace("models/", "");
             }
 
             modelStatus.textContent = `Found ${supportedModels.length} models.`;
@@ -58,7 +60,8 @@ function saveOptions(e) {
     browser.storage.sync.set({
         apiKey: document.querySelector("#apiKey").value,
         model: document.querySelector("#model").value,
-        defaultLanguage: document.querySelector("#defaultLanguage").value
+        defaultLanguage: document.querySelector("#defaultLanguage").value,
+        theme: document.querySelector("#theme").value
     }).then(() => {
         const status = document.querySelector("#status");
         status.textContent = "Options saved.";
@@ -80,6 +83,7 @@ function restoreOptions() {
     function setCurrentChoice(result) {
         document.querySelector("#apiKey").value = result.apiKey || "";
         document.querySelector("#defaultLanguage").value = result.defaultLanguage || "";
+        document.querySelector("#theme").value = result.theme || "system";
 
         // Populate standard options initially so it's not empty, we might overwrite later 
         const modelSelect = document.querySelector("#model");
@@ -101,11 +105,30 @@ function restoreOptions() {
         console.log(`Error: ${error}`);
     }
 
-    let getting = browser.storage.sync.get(["apiKey", "model", "defaultLanguage"]);
+    let getting = browser.storage.sync.get(["apiKey", "model", "defaultLanguage", "theme"]);
     getting.then(setCurrentChoice, onError);
 }
 
-document.addEventListener("DOMContentLoaded", restoreOptions);
+// Load keyboard shortcut display
+async function loadShortcut() {
+    try {
+        const commands = await browser.commands.getAll();
+        const askCmd = commands.find(c => c.name === "ask-inline-shortcut");
+        if (askCmd && askCmd.shortcut) {
+            document.getElementById("shortcut-keys").textContent = askCmd.shortcut;
+        } else {
+            document.getElementById("shortcut-keys").textContent = "Not set";
+        }
+    } catch (e) {
+        document.getElementById("shortcut-keys").textContent = "Ctrl+Shift+A (default)";
+    }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    restoreOptions();
+    loadShortcut();
+});
+
 document.querySelector("form").addEventListener("submit", saveOptions);
 
 // Refresh models manually
