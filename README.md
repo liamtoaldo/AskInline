@@ -1,40 +1,63 @@
-# AskInline
+<div align="center">
+  <img src="img/icon-128.png" alt="AskInline Logo" width="100">
+  <h1>AskInline</h1>
+  <p><strong>Ask your AI without leaving the page.</strong></p>
+  <p>
+    <img src="https://img.shields.io/badge/Firefox-Extension-FF7139?logo=firefox-browser&logoColor=white" alt="Firefox Extension">
+    <img src="https://img.shields.io/badge/Manifest-V3-blueviolet" alt="Manifest V3">
+    <img src="https://img.shields.io/badge/Powered_by-Gemini_AI-4285F4?logo=google&logoColor=white" alt="Powered by Gemini">
+    <img src="https://img.shields.io/github/license/liamtoaldo/AskInline" alt="License">
+  </p>
+</div>
 
-AskInline is a Firefox extension that integrates Google's Gemini AI directly into your browser context menu. It allows you to select text on any webpage and instantly query Gemini about it, whether you need a definition, a translation, or a summary, without opening a new tab or breaking your flow.
+---
 
-![AskInline Screenshot](img/screenshot.png)
+AskInline is a Firefox extension that integrates Google's Gemini AI directly into your browser context menu. Select text on any webpage and instantly query Gemini about it: definitions, translations, summaries, and more, without ever opening a new tab.
 
-## Why?
+<div align="center">
+  <img src="img/screenshot.png" alt="AskInline in action" width="700">
+</div>
 
-Switching tabs to ask an LLM a quick question is a friction point. AskInline solves this by bringing the model to the text. It's built with **Manifest V3** and **Vanilla JS**, keeping it extremely lightweight (no build steps, no heavy frameworks).
+## ✨ Why AskInline?
 
-## Features
+Switching tabs to ask an LLM a quick question is a friction point. **AskInline eliminates that friction** by bringing the model to the text. It's built with **Manifest V3** and **Vanilla JS**, keeping it extremely lightweight — no build steps, no heavy frameworks, just pure speed.
 
-- **Contextual Analysis**: Right-click any selection to "AskInline".
-- **Draggable UI**: The result pops up in a non-intrusive, movable modal.
-- **Markdown Support**: Responses are rendered with proper formatting (bold, code blocks, lists).
-- **Model Selection**: Switch between `Gemini 2.5 Flash`, `Pro`, or `Lite` depending on your speed/cost needs.
-- **Privacy**: Your API Key is stored locally in your browser (`browser.storage.sync`) and is never sent to any third-party server other than Google's API directly.
+## 🚀 Features
 
-## Installation
-1. Clone this repository: `git clone https://github.com/liamtoaldo/AskInline.git`
+| Feature | Description |
+|---|---|
+| **Contextual Analysis** | Right-click any selection to "AskInline" via the context menu |
+| **Draggable UI** | Responses appear in a non-intrusive, movable & resizable modal |
+| **Markdown Rendering** | Formatted responses with bold, code blocks, lists, and more |
+| **Model Selection** | Switch between `Gemini 3 Flash`, `Pro`, or `Lite` on the fly, or any available model, really |
+| **Streaming** | Responses stream in real-time, token by token |
+| **Privacy First** | Your API key stays local in `browser.storage.sync` — never sent to third parties |
+
+## 📦 Installation
+
+1. Clone this repository:
+   ```bash
+   git clone https://github.com/liamtoaldo/AskInline.git
+   ```
 2. Open Firefox and navigate to `about:debugging`.
-3. Click **"This Firefox"** > **"Load Temporary Add-on"**.
+3. Click **"This Firefox"** → **"Load Temporary Add-on"**.
 4. Select the `manifest.json` file from the cloned folder.
 
-## Configuration
+## ⚙️ Configuration
 
-1.  Get your API Key from [Google AI Studio](https://aistudio.google.com/).
-2.  Open the extension settings (formatted as a standard browser options page).
-3.  Paste your key and select your preferred model.
-4.  Save.
+1. Get your API Key from [Google AI Studio](https://aistudio.google.com/).
+2. Open the extension settings (via the standard browser options page).
+3. Paste your key and select your preferred model.
+4. Save — you're ready to go.
 
-## Roadmap
+## 🛠 Tech Stack
 
-- [ ] Image analysis support (right-click on images).
-- [ ] "Pin" mode for the modal.
-- [ ] Chat history within the session.
+- **Manifest V3** — Modern extension architecture
+- **Vanilla JS** — Zero dependencies, zero build steps
+- **Google Gemini API** — Streaming generative AI responses
+- **marked.js** — Lightweight Markdown rendering
+- **prism.js** — Syntax highlighting for code blocks
 
-## License
+## 📄 License
 
-MIT
+This project is licensed under the [MIT License](LICENSE).

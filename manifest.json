@@ -7,16 +7,39 @@
     }
   },
   "version": "1.0",
-  "description": "Right-click selected text to Ask Gemini AI.",
+  "description": "Right-click selected text to Ask Gemini AI. Inline AI assistant with streaming responses, markdown rendering, and syntax highlighting.",
+  "icons": {
+    "16": "img/icon-16.png",
+    "32": "img/icon-32.png",
+    "48": "img/icon-48.png",
+    "128": "img/icon-128.png"
+  },
   "permissions": [
     "activeTab",
     "contextMenus",
     "storage"
   ],
   "host_permissions": [
-    "https://generativelanguage.googleapis.com/",
-    "<all_urls>"
+    "https://generativelanguage.googleapis.com/"
   ],
+  "action": {
+    "default_icon": {
+      "16": "img/icon-16.png",
+      "32": "img/icon-32.png",
+      "48": "img/icon-48.png",
+      "128": "img/icon-128.png"
+    },
+    "default_title": "AskInline"
+  },
+  "commands": {
+    "ask-inline-shortcut": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+A",
+        "mac": "Command+Shift+A"
+      },
+      "description": "Open AskInline on selected text"
+    }
+  },
   "options_ui": {
     "page": "src/options/options.html",
     "open_in_tab": false
@@ -32,9 +55,12 @@
         "<all_urls>"
       ],
       "js": [
+        "src/lib/marked.min.js",
+        "src/lib/prism.min.js",
         "src/content/content.js"
       ],
       "css": [
+        "src/lib/prism-dark.css",
         "src/content/content.css"
       ]
     }

@@ -3,5 +3,5 @@ node_modules/
 config.js
 *.log
 .vscode/
-todo.md
+todo*.md
 AGENTS.md
