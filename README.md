@@ -8,6 +8,11 @@
     <img src="https://img.shields.io/badge/Powered_by-Gemini_AI-4285F4?logo=google&logoColor=white" alt="Powered by Gemini">
     <img src="https://img.shields.io/github/license/liamtoaldo/AskInline" alt="License">
   </p>
+  <p>
+    <a href="https://addons.mozilla.org/en-US/firefox/addon/askinline/">
+      <img src="https://img.shields.io/badge/Install%20on-Firefox%20Add--ons-FF7139?logo=firefox-browser&logoColor=white" alt="Install on Firefox Add-ons">
+    </a>
+  </p>
 </div>
 
 ---
@@ -34,6 +39,10 @@ Switching tabs to ask an LLM a quick question is a friction point. **AskInline e
 | **Privacy First** | Your API key stays local in `browser.storage.sync` — never sent to third parties |
 
 ## 📦 Installation
+
+Install directly from Firefox Add-ons: [AskInline on AMO](https://addons.mozilla.org/en-US/firefox/addon/askinline/)
+
+Or load it temporarily for development:
 
 1. Clone this repository:
    ```bash
